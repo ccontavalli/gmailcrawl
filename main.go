@@ -11,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"net/mail"
-	"net/url"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -20,14 +19,14 @@ import (
 // getClient uses a Context and Config to retrieve a Token
 // then generate a Client. It returns the generated Client.
 func getClient(ctx context.Context, config *oauth2.Config) *http.Client {
-	cacheFile, err := tokenCacheFile()
+	cfile, err := getTokenCacheFileName()
 	if err != nil {
 		log.Fatalf("Unable to get path to cached credential file. %v", err)
 	}
-	tok, err := tokenFromFile(cacheFile)
+	tok, err := getTokenFromFile(cfile)
 	if err != nil {
 		tok = getTokenFromWeb(config)
-		saveToken(cacheFile, tok)
+		saveToken(cfile, tok)
 	}
 	return config.Client(ctx, tok)
 }
@@ -51,22 +50,21 @@ func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
 	return tok
 }
 
-// tokenCacheFile generates credential file path/filename.
+// getTokenCacheFile generates credential file path/filename.
 // It returns the generated credential path/filename.
-func tokenCacheFile() (string, error) {
+func getTokenCacheFileName() (string, error) {
 	usr, err := user.Current()
 	if err != nil {
 		return "", err
 	}
 	tokenCacheDir := filepath.Join(usr.HomeDir, ".credentials")
 	os.MkdirAll(tokenCacheDir, 0700)
-	return filepath.Join(tokenCacheDir,
-		url.QueryEscape("gmail-go-quickstart.json")), err
+	return filepath.Join(tokenCacheDir, "gmailcrawl.json"), err
 }
 
-// tokenFromFile retrieves a Token from a given file path.
-// It returns the retrieved Token and any read error encountered.
-func tokenFromFile(file string) (*oauth2.Token, error) {
+// Retrieves a Token from a given file path.
+// Returns the retrieved Token and any read error encountered.
+func getTokenFromFile(file string) (*oauth2.Token, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
@@ -77,8 +75,7 @@ func tokenFromFile(file string) (*oauth2.Token, error) {
 	return t, err
 }
 
-// saveToken uses a file path to create a file and store the
-// token in it.
+// Creates a file path to store the token in it.
 func saveToken(file string, token *oauth2.Token) {
 	fmt.Printf("Saving credential file to: %s\n", file)
 	f, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
@@ -92,14 +89,14 @@ func saveToken(file string, token *oauth2.Token) {
 func main() {
 	ctx := context.Background()
 
-	b, err := ioutil.ReadFile("client_secret.json")
+	secret, err := ioutil.ReadFile("client_secret.json")
 	if err != nil {
-		log.Fatalf("Unable to read client secret file: %v", err)
+		log.Fatalf("Unable to read client_secret.json file (follow the instructions to create one): %v", err)
 	}
 
 	// If modifying these scopes, delete your previously saved credentials
 	// at ~/.credentials/gmail-go-quickstart.json
-	config, err := google.ConfigFromJSON(b, gmail.GmailReadonlyScope)
+	config, err := google.ConfigFromJSON(secret, gmail.GmailReadonlyScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
@@ -124,53 +121,47 @@ func main() {
 		}
 
 		// Fields: From, To, Cc, Bcc
-		if len(r.Messages) > 0 {
-			//fmt.Print("Messages:\n")
-			for _, mid := range r.Messages {
-				//fmt.Printf("- %s, %+v\n",  mid.Id, mid)
-
-				mgetter := gmail.NewUsersMessagesService(srv)
-				call := mgetter.Get(user, mid.Id)
-				call.Format("metadata")
-				call.Fields("id,payload/headers")
-				mymail, err := call.Do()
-				if err != nil {
-					continue
-				}
-
-				for _, value := range mymail.Payload.Headers {
-					if value.Name == "From" || value.Name == "Cc" || value.Name == "To" || value.Name == "Bcc" || value.Name == "Delivered-To" || value.Name == "Return-Path" {
-						addresses, _ := mail.ParseAddressList(value.Value)
-						for _, address := range addresses {
-							found := results[address.Address]
-							if found != nil {
-								if len(found.Name) <= 0 && len(address.Name) > 0 {
-									found.Name = address.Name
-								}
-							} else {
-								results[address.Address] = address
-							}
-						}
-					}
-
-					//fmt.Printf("HDR: %+v\n", value)
-				}
-				//fmt.Printf("%+v\n", results)
-				//  for _, value := range results {
-				//    fmt.Printf("%s %s\n", value.Address, value.Name)
-				//  }
-				//        return
-			}
-		} else {
+		if len(r.Messages) <= 0 {
 			fmt.Print("No Messages found.")
 			break
+		}
+		//fmt.Print("Messages:\n")
+		for _, mid := range r.Messages {
+			//fmt.Printf("- %s, %+v\n",  mid.Id, mid)
+
+			mgetter := gmail.NewUsersMessagesService(srv)
+			call := mgetter.Get(user, mid.Id)
+			call.Format("metadata")
+			call.Fields("id,payload/headers")
+			mymail, err := call.Do()
+			if err != nil {
+				continue
+			}
+
+			for _, value := range mymail.Payload.Headers {
+				if value.Name != "From" && value.Name != "Cc" && value.Name != "To" && value.Name != "Bcc" &&
+					value.Name != "Delivered-To" && value.Name != "Return-Path" {
+					continue
+				}
+				addresses, _ := mail.ParseAddressList(value.Value)
+				for _, address := range addresses {
+                                        key := strings.ToLower(address.Address)
+					found := results[key]
+					if found != nil {
+						if len(found.Name) <= 0 && len(address.Name) > 0 {
+							found.Name = address.Name
+						}
+					} else {
+						results[address.Address] = address
+					}
+				}
+			}
 		}
 		if len(r.NextPageToken) <= 0 {
 			break
 		}
-		newcall := srv.Users.Messages.List(user)
-		newcall.PageToken(r.NextPageToken)
-		call = newcall
+		call = srv.Users.Messages.List(user)
+		call.PageToken(r.NextPageToken)
 	}
 
 	for _, value := range results {
