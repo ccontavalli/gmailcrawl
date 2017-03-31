@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -14,6 +15,8 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
+	"strings"
 )
 
 // getClient uses a Context and Config to retrieve a Token
@@ -86,7 +89,30 @@ func saveToken(file string, token *oauth2.Token) {
 	json.NewEncoder(f).Encode(token)
 }
 
+var g_limit = flag.Int("limit", 0, "Limit the download to this many messages.")
+var g_query = flag.String("query", "", "Query to perform to select the messages.")
+var g_blacklist = flag.String("blacklist", `(mailer-daemon|password|\+bnc[A-Z0-9]*|bounce|bounce-.*|no-reply.*|do-not-reply.*|noreply.*|bounces?\+.*|prvs=.*=)@|notify@twitter.com|@((docs|.*\.bounces)\.google\.com|bounce.twitter.com)`, "Do not collect emails matching this regexp. Checked before the whitelist.")
+var g_whitelist = flag.String("whitelist", "", "Only collect emails matching this regexp. Checked after the blacklist.")
+
 func main() {
+	flag.Parse()
+
+	var err error
+	var whitelist *regexp.Regexp
+	if *g_whitelist != "" {
+		whitelist, err = regexp.Compile(*g_whitelist)
+		if err != nil {
+			log.Fatalf("Could not compile -whitelist into a valid regular expression. %v", err)
+		}
+	}
+	var blacklist *regexp.Regexp
+	if *g_blacklist != "" {
+		blacklist, err = regexp.Compile(*g_blacklist)
+		if err != nil {
+			log.Fatalf("Could not compile -blacklist into a valid regular expression. %v", err)
+		}
+	}
+
 	ctx := context.Background()
 
 	secret, err := ioutil.ReadFile("client_secret.json")
@@ -109,24 +135,34 @@ func main() {
 
 	user := "me"
 
+	parsed := 0
 	results := make(map[string]*mail.Address)
 	call := srv.Users.Messages.List(user)
+
+CallLoop:
 	for {
-		call.Fields("messages(id,payload/headers),nextPageToken")
+		if *g_query != "" {
+			call.Q(*g_query)
+		}
 		call.MaxResults(10000000)
 		r, err := call.Do()
 		if err != nil {
-			log.Fatalf("Unable to retrieve labels. %v", err)
+			log.Printf("Unable to retrieve labels - %v", err)
 			break
 		}
 
-		// Fields: From, To, Cc, Bcc
 		if len(r.Messages) <= 0 {
-			fmt.Print("No Messages found.")
+			log.Print("No Messages found.")
 			break
 		}
+
 		//fmt.Print("Messages:\n")
 		for _, mid := range r.Messages {
+			if *g_limit > 0 && parsed >= *g_limit {
+				break CallLoop
+			}
+			parsed += 1
+
 			//fmt.Printf("- %s, %+v\n",  mid.Id, mid)
 
 			mgetter := gmail.NewUsersMessagesService(srv)
@@ -145,7 +181,13 @@ func main() {
 				}
 				addresses, _ := mail.ParseAddressList(value.Value)
 				for _, address := range addresses {
-                                        key := strings.ToLower(address.Address)
+					if blacklist != nil && blacklist.MatchString(address.Address) {
+						continue
+					}
+					if whitelist != nil && !whitelist.MatchString(address.Address) {
+						continue
+					}
+					key := strings.ToLower(address.Address)
 					found := results[key]
 					if found != nil {
 						if len(found.Name) <= 0 && len(address.Name) > 0 {
