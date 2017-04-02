@@ -1,5 +1,17 @@
 package main
 
+// This code was created from the quickstart example at this page:
+//
+//   https://developers.google.com/gmail/api/quickstart/go
+//
+// Changes made by Carlo Contavalli, ccontavalli@gmail.com.
+//
+// This code was released under the BSD 2-clause license, and is free
+// to use and modify.
+//
+// Please read the LICENSE file for more details.
+
+
 import (
 	"encoding/json"
 	"flag"
@@ -8,7 +20,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/gmail/v1"
-	"io/ioutil"
+        "encoding/base64"
 	"log"
 	"net/http"
 	"net/mail"
@@ -18,6 +30,19 @@ import (
 	"regexp"
 	"strings"
 )
+
+// Client id created using https://console.developers.google.com/start/api?id=gmail
+// It uniquely identifies the client to google APIs.
+var clientId =
+"eyJpbnN0YWxsZWQiOnsiY2xpZW50X2lkIjoiNzA2MjI0NTUyMzAyLTNraGtkdnZ1dWFmYmI0YWhz" +
+"MjQ3dGg2bWo2aGhzY29mLmFwcHMuZ29vZ2xldXNlcmNvbnRlbnQuY29tIiwicHJvamVjdF9pZCI6" +
+"InBvaXNlZC1lcGlncmFtLTE2MjgwOCIsImF1dGhfdXJpIjoiaHR0cHM6Ly9hY2NvdW50cy5nb29n" +
+"bGUuY29tL28vb2F1dGgyL2F1dGgiLCJ0b2tlbl91cmkiOiJodHRwczovL2FjY291bnRzLmdvb2ds" +
+"ZS5jb20vby9vYXV0aDIvdG9rZW4iLCJhdXRoX3Byb3ZpZGVyX3g1MDlfY2VydF91cmwiOiJodHRw" +
+"czovL3d3dy5nb29nbGVhcGlzLmNvbS9vYXV0aDIvdjEvY2VydHMiLCJjbGllbnRfc2VjcmV0Ijoi" +
+"N0VoQkhqU0hfOTJ4OGt0OERlU0VxQjJZIiwicmVkaXJlY3RfdXJpcyI6WyJ1cm46aWV0Zjp3Zzpv" +
+"YXV0aDoyLjA6b29iIiwiaHR0cDovL2xvY2FsaG9zdCJdfX0="
+
 
 // getClient uses a Context and Config to retrieve a Token
 // then generate a Client. It returns the generated Client.
@@ -115,9 +140,9 @@ func main() {
 
 	ctx := context.Background()
 
-	secret, err := ioutil.ReadFile("client_secret.json")
+	secret, err := base64.StdEncoding.DecodeString(clientId)
 	if err != nil {
-		log.Fatalf("Unable to read client_secret.json file (follow the instructions to create one): %v", err)
+		log.Fatalf("Unable to decode client ID - %v", err)
 	}
 
 	// If modifying these scopes, delete your previously saved credentials
