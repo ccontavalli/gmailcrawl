@@ -5,7 +5,7 @@ discussed certain topics with?
 
 Maybe to bootstrap a mailing list, a newsletter, or to send them an update?
 
-**`gmailcrawl` is a command line tool, written in go, to do extract all email
+**`gmailcrawl` is a command line tool, written in go, to extract all email
 addresses involved in threads you select.**
 
 It only works with GMAIL accounts, since it uses GMAIL APIs.
