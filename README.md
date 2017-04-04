@@ -46,3 +46,10 @@ updates to your google docs).
 3) Profit:
 
        $GOPATH/bin/gmailcrawl --query="robots championship" --limit=1000
+
+
+The first time you run the tool, it will ask you to visit a google web site,
+authorize it, and return a token to cut and paste. Just follow the instructions.
+
+This is necessary to authorize the tool to access your mailbox, and give it
+a token to be passed to the gmail APIs.
