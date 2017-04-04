@@ -6,10 +6,10 @@ package main
 //
 // Changes made by Carlo Contavalli, ccontavalli@gmail.com.
 //
-// This code was released under the BSD 2-clause license, and is free
+// This code is released under the BSD 2-clause license, and is free
 // to use and modify.
 //
-// Please read the LICENSE file for more details.
+// Please read the LICENSE file for the full terms and conditions.
 
 import (
 	"encoding/base64"
